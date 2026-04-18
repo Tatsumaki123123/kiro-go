@@ -1629,6 +1629,7 @@ func (h *Handler) apiGetAccounts(w http.ResponseWriter, r *http.Request) {
 			"hasToken":          a.AccessToken != "",
 			"machineId":         a.MachineId,
 			"weight":            a.Weight,
+			"proxyUrl":          a.ProxyURL,
 			"subscriptionType":  a.SubscriptionType,
 			"subscriptionTitle": a.SubscriptionTitle,
 			"daysRemaining":     a.DaysRemaining,
@@ -1722,6 +1723,13 @@ func (h *Handler) apiUpdateAccount(w http.ResponseWriter, r *http.Request, id st
 	}
 	if v, ok := updates["weight"].(float64); ok {
 		existing.Weight = int(v)
+	}
+	if v, ok := updates["proxyUrl"].(string); ok {
+		// 清除旧代理客户端缓存
+		if existing.ProxyURL != "" && existing.ProxyURL != v {
+			InvalidateProxyClient(existing.ProxyURL)
+		}
+		existing.ProxyURL = v
 	}
 
 	if err := config.UpdateAccount(id, *existing); err != nil {
@@ -2404,6 +2412,8 @@ func (h *Handler) apiGetAccountFull(w http.ResponseWriter, r *http.Request, id s
 		"region":            account.Region,
 		"expiresAt":         account.ExpiresAt,
 		"machineId":         account.MachineId,
+		"weight":            account.Weight,
+		"proxyUrl":          account.ProxyURL,
 		"enabled":           account.Enabled,
 		"banStatus":         account.BanStatus,
 		"banReason":         account.BanReason,

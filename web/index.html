@@ -1281,7 +1281,10 @@
                 'filter.banned': '已封禁',
                 'accounts.weight': '权重',
                 'detail.weight': '请求权重',
-                'detail.weightHint': '0-1=普通, 2+=高优先级'
+                'detail.weightHint': '0-1=普通, 2+=高优先级',
+                'detail.proxyUrl': '代理 URL（proxy_url）',
+                'detail.proxyUrlPlaceholder': 'socks5://username:password@proxy_ip:port/',
+                'detail.proxyUrlHint': '支持 http/https/socks5，留空则不使用代理',
             },
             en: {
                 'login.subtitle': 'Enter admin password to login',
@@ -1483,7 +1486,10 @@
                 'filter.banned': 'Banned',
                 'accounts.weight': 'Weight',
                 'detail.weight': 'Request Weight',
-                'detail.weightHint': '0-1=normal, 2+=higher priority'
+                'detail.weightHint': '0-1=normal, 2+=higher priority',
+                'detail.proxyUrl': 'Proxy URL (proxy_url)',
+                'detail.proxyUrlPlaceholder': 'socks5://username:password@proxy_ip:port/',
+                'detail.proxyUrlHint': 'Supports http/https/socks5. Leave empty to disable proxy.',
             }
         };
         let currentLang = localStorage.getItem('kiro_lang') || 'zh';
@@ -1895,6 +1901,10 @@
                 '<span style="color:#64748b;font-size:12px;flex:1">' + t('detail.weightHint') + '</span>' +
                 '<button class="btn btn-sm btn-primary" onclick="saveWeight(\'' + id + '\')">' + t('common.saved').split(' ')[0] + '</button>' +
                 '</div></div>' +
+                '<div class="detail-section"><h4>' + t('detail.proxyUrl') + '</h4><div class="machine-id-row">' +
+                '<input type="text" id="proxyUrlInput" value="' + (a.proxyUrl || 'socks5://') + '" placeholder="' + t('detail.proxyUrlPlaceholder') + '" style="flex:1">' +
+                '<button class="btn btn-sm btn-primary" onclick="saveProxyUrl(\'' + id + '\')">' + t('common.saved').split(' ')[0] + '</button>' +
+                '</div><div style="color:#64748b;font-size:12px;margin-top:4px">' + t('detail.proxyUrlHint') + '</div></div>' +
                 '<div class="detail-section"><h4>' + t('detail.subscription') + '</h4><div class="detail-grid">' +
                 '<div class="detail-item"><div class="detail-label">' + t('detail.subscriptionType') + '</div><div class="detail-value">' + (a.subscriptionTitle || a.subscriptionType || '-') + '</div></div>' +
                 '<div class="detail-item"><div class="detail-label">' + t('detail.tokenExpiry') + '</div><div class="detail-value">' + (a.expiresAt ? new Date(a.expiresAt * 1000).toLocaleString() : '-') + '</div></div>' +
@@ -1968,6 +1978,17 @@
                 const res = await fetch('/admin/api/accounts/' + id, {
                     method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Admin-Password': password },
                     body: JSON.stringify({ weight })
+                });
+                const d = await res.json();
+                if (d.success) { alert(t('detail.saved')); loadAccounts(); } else { alert(t('detail.saveFailed') + ': ' + d.error); }
+            } catch (e) { alert(t('detail.saveFailed')); }
+        }
+        async function saveProxyUrl(id) {
+            const proxyUrl = document.getElementById('proxyUrlInput').value.trim();
+            try {
+                const res = await fetch('/admin/api/accounts/' + id, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Admin-Password': password },
+                    body: JSON.stringify({ proxyUrl })
                 });
                 const d = await res.json();
                 if (d.success) { alert(t('detail.saved')); loadAccounts(); } else { alert(t('detail.saveFailed') + ': ' + d.error); }

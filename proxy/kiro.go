@@ -9,8 +9,10 @@ import (
 	"io"
 	"kiro-api-proxy/config"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,6 +53,70 @@ var kiroHttpClient = &http.Client{
 		DisableCompression:  false,            // 启用压缩
 		ForceAttemptHTTP2:   true,             // 尝试使用 HTTP/2
 	},
+}
+
+// 代理客户端缓存，key 为 proxyURL
+var (
+	proxyClientsMu sync.Mutex
+	proxyClients   = make(map[string]*http.Client)
+)
+
+// getHTTPClient 根据账号的 ProxyURL 返回合适的 HTTP 客户端
+func getHTTPClient(account *config.Account) *http.Client {
+	if account.ProxyURL == "" {
+		return kiroHttpClient
+	}
+
+	proxyClientsMu.Lock()
+	defer proxyClientsMu.Unlock()
+
+	if c, ok := proxyClients[account.ProxyURL]; ok {
+		fmt.Printf("[KiroAPI] Using proxy %q for account %s\n", account.ProxyURL, account.Email)
+		return c
+	}
+
+	transport, err := buildProxyTransport(account.ProxyURL)
+	if err != nil {
+		fmt.Printf("[KiroAPI] Invalid proxy URL %q: %v, using default client\n", account.ProxyURL, err)
+		return kiroHttpClient
+	}
+
+	c := &http.Client{
+		Timeout:   5 * time.Minute,
+		Transport: transport,
+	}
+	proxyClients[account.ProxyURL] = c
+	fmt.Printf("[KiroAPI] Created proxy client for %q (account: %s)\n", account.ProxyURL, account.Email)
+	return c
+}
+
+// buildProxyTransport 根据代理 URL 构建 http.Transport
+// 支持 http/https 代理和 socks5 代理（通过环境变量方式）
+func buildProxyTransport(proxyURL string) (http.RoundTripper, error) {
+	parsed, err := url.Parse(proxyURL)
+	if err != nil {
+		return nil, err
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	switch scheme {
+	case "http", "https", "socks5", "socks5h":
+		return &http.Transport{
+			Proxy:               http.ProxyURL(parsed),
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 20,
+			IdleConnTimeout:     90 * time.Second,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported proxy scheme: %s", parsed.Scheme)
+	}
+}
+
+// InvalidateProxyClient 当账号代理 URL 变更时，清除缓存的客户端
+func InvalidateProxyClient(proxyURL string) {
+	proxyClientsMu.Lock()
+	defer proxyClientsMu.Unlock()
+	delete(proxyClients, proxyURL)
 }
 
 // ==================== 请求结构 ====================
@@ -201,7 +267,7 @@ func CallKiroAPI(account *config.Account, payload *KiroPayload, callback *KiroSt
 		req.Header.Set("Amz-Sdk-Invocation-Id", uuid.New().String())
 		req.Header.Set("Authorization", "Bearer "+account.AccessToken)
 
-		resp, err := kiroHttpClient.Do(req)
+		resp, err := getHTTPClient(account).Do(req)
 		if err != nil {
 			lastErr = err
 			fmt.Printf("[KiroAPI] Endpoint %s failed: %v\n", ep.Name, err)

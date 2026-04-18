@@ -53,6 +53,9 @@ type Account struct {
 	// Priority weight for load balancing (higher = more requests)
 	Weight int `json:"weight,omitempty"` // 0 or 1 = normal, 2+ = higher priority
 
+	// Per-account proxy URL (e.g. socks5://user:pass@host:port or http://host:port)
+	ProxyURL string `json:"proxyUrl,omitempty"`
+
 	// Account status
 	Enabled   bool   `json:"enabled"`             // Whether account is active in the pool
 	BanStatus string `json:"banStatus,omitempty"` // Ban status: "ACTIVE", "BANNED", "SUSPENDED"
