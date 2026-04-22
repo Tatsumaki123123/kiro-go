@@ -26,7 +26,8 @@ func GetUsageLimits(account *config.Account) (*UsageLimitsResponse, error) {
 
 	setKiroHeaders(req, account)
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	// 使用账号的代理配置
+	client := getHTTPClient(account)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -58,7 +59,8 @@ func GetUserInfo(account *config.Account) (*UserInfoResponse, error) {
 	setKiroHeaders(req, account)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	// 使用账号的代理配置
+	client := getHTTPClient(account)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -88,7 +90,8 @@ func ListAvailableModels(account *config.Account) ([]ModelInfo, error) {
 
 	setKiroHeaders(req, account)
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	// 使用账号的代理配置
+	client := getHTTPClient(account)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

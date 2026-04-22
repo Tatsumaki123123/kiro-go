@@ -13,13 +13,13 @@ import (
 // RefreshToken 刷新 access token
 func RefreshToken(account *config.Account) (string, string, int64, error) {
 	if account.AuthMethod == "social" {
-		return refreshSocialToken(account.RefreshToken)
+		return refreshSocialToken(account.RefreshToken, account.ProxyURL)
 	}
-	return refreshOIDCToken(account.RefreshToken, account.ClientID, account.ClientSecret, account.Region)
+	return refreshOIDCToken(account.RefreshToken, account.ClientID, account.ClientSecret, account.Region, account.ProxyURL)
 }
 
 // refreshOIDCToken IdC/Builder ID token 刷新
-func refreshOIDCToken(refreshToken, clientID, clientSecret, region string) (string, string, int64, error) {
+func refreshOIDCToken(refreshToken, clientID, clientSecret, region, proxyURL string) (string, string, int64, error) {
 	if clientID == "" || clientSecret == "" {
 		return "", "", 0, fmt.Errorf("OIDC refresh requires clientId and clientSecret")
 	}
@@ -40,7 +40,9 @@ func refreshOIDCToken(refreshToken, clientID, clientSecret, region string) (stri
 	req, _ := http.NewRequest("POST", url, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := httpClient.Do(req)
+	// 使用代理客户端
+	client := GetHTTPClientWithProxy(proxyURL)
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", "", 0, err
 	}
@@ -66,7 +68,7 @@ func refreshOIDCToken(refreshToken, clientID, clientSecret, region string) (stri
 }
 
 // refreshSocialToken Social (GitHub/Google) token 刷新
-func refreshSocialToken(refreshToken string) (string, string, int64, error) {
+func refreshSocialToken(refreshToken, proxyURL string) (string, string, int64, error) {
 	url := "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken"
 
 	payload := map[string]string{
@@ -77,7 +79,9 @@ func refreshSocialToken(refreshToken string) (string, string, int64, error) {
 	req, _ := http.NewRequest("POST", url, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := httpClient.Do(req)
+	// 使用代理客户端
+	client := GetHTTPClientWithProxy(proxyURL)
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", "", 0, err
 	}

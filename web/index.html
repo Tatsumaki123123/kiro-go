@@ -1081,8 +1081,8 @@
                         <button class="btn btn-sm btn-secondary" onclick="batchAction('refresh')" style="padding:3px 10px;font-size:12px" data-i18n="batch.refresh"></button>
                         <div style="height:16px;width:1px;background:#e2e8f0;flex-shrink:0"></div>
                     </div>
-                    <div style="display:flex;gap:6px;align-items:center;margin-left:auto;flex-shrink:0">
-                        <button class="btn btn-sm btn-danger" onclick="deleteDisabledAccounts()" data-i18n="accounts.deleteDisabled"></button>
+                    <div style="display:flex;gap:6px;align-items:center;margin-left:auto;flex-shrink:0;flex-wrap:wrap">
+                        <button class="btn btn-sm btn-danger" onclick="deleteDisabledAccounts()" data-i18n="accounts.deleteDisabled" style="white-space:nowrap"></button>
                         <input type="text" id="filterSearch" oninput="onFilterChange()" style="width:200px;padding:6px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none" data-i18n-placeholder="filter.search">
                         <div class="filter-select-wrapper">
                             <div class="filter-select-btn" id="filterSelectBtn" onclick="toggleFilterDropdown()">

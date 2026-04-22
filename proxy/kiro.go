@@ -4,10 +4,12 @@ package proxy
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"kiro-api-proxy/config"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -63,7 +65,10 @@ var (
 
 // getHTTPClient 根据账号的 ProxyURL 返回合适的 HTTP 客户端
 func getHTTPClient(account *config.Account) *http.Client {
+	log.Printf("[DEBUG] getHTTPClient called for account: %s, proxyURL: %q\n", account.Email, account.ProxyURL)
+	
 	if account.ProxyURL == "" {
+		log.Printf("[DEBUG] No proxy configured, using default client\n")
 		return kiroHttpClient
 	}
 
@@ -71,13 +76,14 @@ func getHTTPClient(account *config.Account) *http.Client {
 	defer proxyClientsMu.Unlock()
 
 	if c, ok := proxyClients[account.ProxyURL]; ok {
-		fmt.Printf("[KiroAPI] Using proxy %q for account %s\n", account.ProxyURL, account.Email)
+		log.Printf("[KiroAPI] Using cached proxy client %q for account %s\n", account.ProxyURL, account.Email)
 		return c
 	}
 
+	log.Printf("[DEBUG] Creating new proxy client for %q\n", account.ProxyURL)
 	transport, err := buildProxyTransport(account.ProxyURL)
 	if err != nil {
-		fmt.Printf("[KiroAPI] Invalid proxy URL %q: %v, using default client\n", account.ProxyURL, err)
+		log.Printf("[KiroAPI] Invalid proxy URL %q: %v, using default client\n", account.ProxyURL, err)
 		return kiroHttpClient
 	}
 
@@ -86,7 +92,11 @@ func getHTTPClient(account *config.Account) *http.Client {
 		Transport: transport,
 	}
 	proxyClients[account.ProxyURL] = c
-	fmt.Printf("[KiroAPI] Created proxy client for %q (account: %s)\n", account.ProxyURL, account.Email)
+	log.Printf("[KiroAPI] ✓ Created proxy client for %q (account: %s)\n", account.ProxyURL, account.Email)
+	
+	// 检测代理出口 IP
+	go detectProxyIP(c, account.ProxyURL, account.Email)
+	
 	return c
 }
 
@@ -117,6 +127,61 @@ func InvalidateProxyClient(proxyURL string) {
 	proxyClientsMu.Lock()
 	defer proxyClientsMu.Unlock()
 	delete(proxyClients, proxyURL)
+}
+
+// detectProxyIP 检测代理的出口 IP 地址
+func detectProxyIP(client *http.Client, proxyURL, accountEmail string) {
+	// 使用多个 IP 检测服务，提高成功率
+	ipServices := []string{
+		"https://api.ipify.org?format=json",
+		"https://ifconfig.me/ip",
+		"https://icanhazip.com",
+		"https://api.ip.sb/ip",
+	}
+
+	for _, service := range ipServices {
+		req, err := http.NewRequest("GET", service, nil)
+		if err != nil {
+			continue
+		}
+		req.Header.Set("User-Agent", "curl/7.68.0")
+
+		// 设置较短的超时时间
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		req = req.WithContext(ctx)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			continue
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			continue
+		}
+
+		ip := strings.TrimSpace(string(body))
+		
+		// 如果是 JSON 格式，解析出 IP
+		if strings.HasPrefix(ip, "{") {
+			var result struct {
+				IP string `json:"ip"`
+			}
+			if json.Unmarshal(body, &result) == nil {
+				ip = result.IP
+			}
+		}
+
+		// 验证 IP 格式
+		if ip != "" && (strings.Contains(ip, ".") || strings.Contains(ip, ":")) {
+			log.Printf("[Proxy] ✓ Proxy %q exit IP: %s (account: %s)\n", proxyURL, ip, accountEmail)
+			return
+		}
+	}
+
+	log.Printf("[Proxy] ✗ Failed to detect exit IP for proxy %q (account: %s)\n", proxyURL, accountEmail)
 }
 
 // ==================== 请求结构 ====================
@@ -279,16 +344,22 @@ func CallKiroAPI(account *config.Account, payload *KiroPayload, callback *KiroSt
 		req.Header.Set("Amz-Sdk-Invocation-Id", uuid.New().String())
 		req.Header.Set("Authorization", "Bearer "+account.AccessToken)
 
-		resp, err := getHTTPClient(account).Do(req)
+		client := getHTTPClient(account)
+		if account.ProxyURL != "" {
+			log.Printf("[KiroAPI] → Sending request via proxy %q (account: %s, endpoint: %s)\n", 
+				account.ProxyURL, account.Email, ep.Name)
+		}
+		
+		resp, err := client.Do(req)
 		if err != nil {
 			lastErr = err
-			fmt.Printf("[KiroAPI] Endpoint %s failed: %v\n", ep.Name, err)
+			log.Printf("[KiroAPI] Endpoint %s failed: %v\n", ep.Name, err)
 			continue
 		}
 
 		if resp.StatusCode == 429 {
 			resp.Body.Close()
-			fmt.Printf("[KiroAPI] Endpoint %s quota exhausted (429), trying next...\n", ep.Name)
+			log.Printf("[KiroAPI] Endpoint %s quota exhausted (429), trying next...\n", ep.Name)
 			lastErr = fmt.Errorf("quota exhausted on %s", ep.Name)
 			continue
 		}
@@ -321,7 +392,7 @@ func CallKiroAPI(account *config.Account, payload *KiroPayload, callback *KiroSt
 			if resp.StatusCode == 401 || resp.StatusCode == 403 {
 				return lastErr
 			}
-			fmt.Printf("[KiroAPI] Endpoint %s error: %v\n", ep.Name, lastErr)
+			log.Printf("[KiroAPI] Endpoint %s error: %v\n", ep.Name, lastErr)
 			continue
 		}
 
