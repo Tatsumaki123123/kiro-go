@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"kiro-api-proxy/auth"
@@ -432,38 +433,61 @@ func (h *Handler) handleClaudeMessagesInternal(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// 获取账号
-	account := h.pool.GetNext()
-	if account == nil {
-		h.sendClaudeError(w, 503, "api_error", "No available accounts")
-		return
-	}
-
-	// 检查并刷新 token
-	if err := h.ensureValidToken(account); err != nil {
-		h.sendClaudeError(w, 503, "api_error", "Token refresh failed: "+err.Error())
-		return
-	}
-
-	// 解析模型和 thinking 模式
+	// 解析模型和 thinking 模式（与账号无关，提前解析）
 	thinkingCfg := config.GetThinkingConfig()
 	actualModel, thinking := ParseModelAndThinking(req.Model, thinkingCfg.Suffix)
 	req.Model = actualModel
 	estimatedInputTokens := estimateClaudeRequestInputTokens(&req)
-
-	// 转换请求
 	kiroPayload := ClaudeToKiro(&req, thinking)
 
-	// 流式或非流式
-	if req.Stream {
-		h.handleClaudeStream(w, account, kiroPayload, req.Model, thinking, estimatedInputTokens)
-	} else {
-		h.handleClaudeNonStream(w, account, kiroPayload, req.Model, thinking, estimatedInputTokens)
+	const maxRetries = 3
+	triedIDs := make(map[string]bool)
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		account := h.pool.GetNext()
+		if account == nil {
+			h.sendClaudeError(w, 503, "api_error", "No available accounts")
+			return
+		}
+		// 跳过本次请求已试过的账号
+		if triedIDs[account.ID] {
+			break
+		}
+		triedIDs[account.ID] = true
+
+		if err := h.ensureValidToken(account); err != nil {
+			h.sendClaudeError(w, 503, "api_error", "Token refresh failed: "+err.Error())
+			return
+		}
+
+		var suspendedErr *ErrAccountSuspended
+		var callErr error
+
+		if req.Stream {
+			callErr = h.handleClaudeStream(w, account, kiroPayload, req.Model, thinking, estimatedInputTokens)
+		} else {
+			callErr = h.handleClaudeNonStream(w, account, kiroPayload, req.Model, thinking, estimatedInputTokens)
+		}
+
+		if callErr == nil {
+			return
+		}
+
+		if errors.As(callErr, &suspendedErr) {
+			fmt.Printf("[Retry] Account %s suspended, disabling and retrying (attempt %d/%d)\n", account.Email, attempt+1, maxRetries)
+			h.disableAccountSuspended(account.ID)
+			continue
+		}
+
+		// 其他错误直接返回（已在 handleClaudeStream/NonStream 内写入响应）
+		return
 	}
+
+	h.sendClaudeError(w, 503, "api_error", "No available accounts after retrying suspended accounts")
 }
 
-// handleClaudeStream Claude 流式响应
-func (h *Handler) handleClaudeStream(w http.ResponseWriter, account *config.Account, payload *KiroPayload, model string, thinking bool, estimatedInputTokens int) {
+// handleClaudeStream Claude 流式响应，返回 error（suspended 时向上传递）
+func (h *Handler) handleClaudeStream(w http.ResponseWriter, account *config.Account, payload *KiroPayload, model string, thinking bool, estimatedInputTokens int) error {
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -471,7 +495,7 @@ func (h *Handler) handleClaudeStream(w http.ResponseWriter, account *config.Acco
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		h.sendClaudeError(w, 500, "api_error", "Streaming not supported")
-		return
+		return nil
 	}
 
 	// 获取 thinking 输出格式配置
@@ -810,11 +834,15 @@ func (h *Handler) handleClaudeStream(w http.ResponseWriter, account *config.Acco
 	if err != nil {
 		h.recordFailure()
 		h.pool.RecordError(account.ID, strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "quota"))
+		var suspended *ErrAccountSuspended
+		if errors.As(err, &suspended) {
+			return err // 向上传递，由调用方换号重试
+		}
 		h.sendSSE(w, flusher, "error", map[string]interface{}{
 			"type":  "error",
 			"error": map[string]string{"type": "api_error", "message": err.Error()},
 		})
-		return
+		return nil
 	}
 
 	// 刷新剩余缓冲区
@@ -860,6 +888,7 @@ func (h *Handler) handleClaudeStream(w http.ResponseWriter, account *config.Acco
 	h.sendSSE(w, flusher, "message_stop", map[string]interface{}{
 		"type": "message_stop",
 	})
+	return nil
 }
 
 func (h *Handler) sendSSE(w http.ResponseWriter, flusher http.Flusher, event string, data interface{}) {
@@ -922,8 +951,8 @@ func (h *Handler) recordFailure() {
 	atomic.AddInt64(&h.failedRequests, 1)
 }
 
-// handleClaudeNonStream Claude 非流式响应
-func (h *Handler) handleClaudeNonStream(w http.ResponseWriter, account *config.Account, payload *KiroPayload, model string, thinking bool, estimatedInputTokens int) {
+// handleClaudeNonStream Claude 非流式响应，返回 error（suspended 时向上传递）
+func (h *Handler) handleClaudeNonStream(w http.ResponseWriter, account *config.Account, payload *KiroPayload, model string, thinking bool, estimatedInputTokens int) error {
 	var content string
 	var thinkingContent string
 	var toolUses []KiroToolUse
@@ -957,8 +986,12 @@ func (h *Handler) handleClaudeNonStream(w http.ResponseWriter, account *config.A
 	if err != nil {
 		h.recordFailure()
 		h.pool.RecordError(account.ID, strings.Contains(err.Error(), "429"))
+		var suspended *ErrAccountSuspended
+		if errors.As(err, &suspended) {
+			return err
+		}
 		h.sendClaudeError(w, 500, "api_error", err.Error())
-		return
+		return nil
 	}
 
 	// 合并 thinking 内容（如果有 reasoningContentEvent 的内容）
@@ -984,7 +1017,7 @@ func (h *Handler) handleClaudeNonStream(w http.ResponseWriter, account *config.A
 			finalContent = "<think>" + thinkingContent + "</think>" + finalContent
 			thinkingContent = ""
 		case "reasoning_content":
-			finalContent = thinkingContent + finalContent // Claude 格式不支持 reasoning_content，直接拼接
+			finalContent = thinkingContent + finalContent
 			thinkingContent = ""
 		default:
 		}
@@ -993,6 +1026,7 @@ func (h *Handler) handleClaudeNonStream(w http.ResponseWriter, account *config.A
 	resp := KiroToClaudeResponse(finalContent, thinkingContent, toolUses, inputTokens, outputTokens, model)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(resp)
+	return nil
 }
 
 func (h *Handler) sendClaudeError(w http.ResponseWriter, status int, errType, message string) {
@@ -1026,34 +1060,59 @@ func (h *Handler) handleOpenAIChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	account := h.pool.GetNext()
-	if account == nil {
-		h.sendOpenAIError(w, 503, "server_error", "No available accounts")
-		return
-	}
-
-	if err := h.ensureValidToken(account); err != nil {
-		h.sendOpenAIError(w, 503, "server_error", "Token refresh failed")
-		return
-	}
-
-	// 解析模型和 thinking 模式
+	// 解析模型和 thinking 模式（与账号无关，提前解析）
 	thinkingCfg := config.GetThinkingConfig()
 	actualModel, thinking := ParseModelAndThinking(req.Model, thinkingCfg.Suffix)
 	req.Model = actualModel
 	estimatedInputTokens := estimateOpenAIRequestInputTokens(&req)
-
 	kiroPayload := OpenAIToKiro(&req, thinking)
 
-	if req.Stream {
-		h.handleOpenAIStream(w, account, kiroPayload, req.Model, thinking, estimatedInputTokens)
-	} else {
-		h.handleOpenAINonStream(w, account, kiroPayload, req.Model, thinking, estimatedInputTokens)
+	const maxRetries = 3
+	triedIDs := make(map[string]bool)
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		account := h.pool.GetNext()
+		if account == nil {
+			h.sendOpenAIError(w, 503, "server_error", "No available accounts")
+			return
+		}
+		if triedIDs[account.ID] {
+			break
+		}
+		triedIDs[account.ID] = true
+
+		if err := h.ensureValidToken(account); err != nil {
+			h.sendOpenAIError(w, 503, "server_error", "Token refresh failed")
+			return
+		}
+
+		var suspendedErr *ErrAccountSuspended
+		var callErr error
+
+		if req.Stream {
+			callErr = h.handleOpenAIStream(w, account, kiroPayload, req.Model, thinking, estimatedInputTokens)
+		} else {
+			callErr = h.handleOpenAINonStream(w, account, kiroPayload, req.Model, thinking, estimatedInputTokens)
+		}
+
+		if callErr == nil {
+			return
+		}
+
+		if errors.As(callErr, &suspendedErr) {
+			fmt.Printf("[Retry] Account %s suspended, disabling and retrying (attempt %d/%d)\n", account.Email, attempt+1, maxRetries)
+			h.disableAccountSuspended(account.ID)
+			continue
+		}
+
+		return
 	}
+
+	h.sendOpenAIError(w, 503, "server_error", "No available accounts after retrying suspended accounts")
 }
 
-// handleOpenAIStream OpenAI 流式响应
-func (h *Handler) handleOpenAIStream(w http.ResponseWriter, account *config.Account, payload *KiroPayload, model string, thinking bool, estimatedInputTokens int) {
+// handleOpenAIStream OpenAI 流式响应，返回 error（suspended 时向上传递）
+func (h *Handler) handleOpenAIStream(w http.ResponseWriter, account *config.Account, payload *KiroPayload, model string, thinking bool, estimatedInputTokens int) error {
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -1061,7 +1120,7 @@ func (h *Handler) handleOpenAIStream(w http.ResponseWriter, account *config.Acco
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		h.sendOpenAIError(w, 500, "server_error", "Streaming not supported")
-		return
+		return nil
 	}
 
 	// 获取 thinking 输出格式配置
@@ -1370,7 +1429,11 @@ func (h *Handler) handleOpenAIStream(w http.ResponseWriter, account *config.Acco
 	if err != nil {
 		h.recordFailure()
 		h.pool.RecordError(account.ID, strings.Contains(err.Error(), "429"))
-		return
+		var suspended *ErrAccountSuspended
+		if errors.As(err, &suspended) {
+			return err
+		}
+		return nil
 	}
 
 	// 刷新剩余缓冲区
@@ -1425,10 +1488,11 @@ func (h *Handler) handleOpenAIStream(w http.ResponseWriter, account *config.Acco
 	fmt.Fprintf(w, "data: %s\n\n", string(data))
 	fmt.Fprintf(w, "data: [DONE]\n\n")
 	flusher.Flush()
+	return nil
 }
 
-// handleOpenAINonStream OpenAI 非流式响应
-func (h *Handler) handleOpenAINonStream(w http.ResponseWriter, account *config.Account, payload *KiroPayload, model string, thinking bool, estimatedInputTokens int) {
+// handleOpenAINonStream OpenAI 非流式响应，返回 error（suspended 时向上传递）
+func (h *Handler) handleOpenAINonStream(w http.ResponseWriter, account *config.Account, payload *KiroPayload, model string, thinking bool, estimatedInputTokens int) error {
 	var content string
 	var reasoningContent string
 	var toolUses []KiroToolUse
@@ -1453,8 +1517,12 @@ func (h *Handler) handleOpenAINonStream(w http.ResponseWriter, account *config.A
 	if err != nil {
 		h.recordFailure()
 		h.pool.RecordError(account.ID, strings.Contains(err.Error(), "429"))
+		var suspended *ErrAccountSuspended
+		if errors.As(err, &suspended) {
+			return err
+		}
 		h.sendOpenAIError(w, 500, "server_error", err.Error())
-		return
+		return nil
 	}
 
 	// 解析 content 中的 <thinking> 标签
@@ -1476,6 +1544,7 @@ func (h *Handler) handleOpenAINonStream(w http.ResponseWriter, account *config.A
 	resp := KiroToOpenAIResponseWithReasoning(finalContent, reasoningContent, toolUses, inputTokens, outputTokens, model, thinkingFormat)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(resp)
+	return nil
 }
 
 func (h *Handler) sendOpenAIError(w http.ResponseWriter, status int, errType, message string) {
@@ -1487,6 +1556,22 @@ func (h *Handler) sendOpenAIError(w http.ResponseWriter, status int, errType, me
 			"message": message,
 		},
 	})
+}
+
+// disableAccountSuspended 将账号标记为暂停并禁用，从账号池移除
+func (h *Handler) disableAccountSuspended(id string) {
+	accounts := config.GetAccounts()
+	for _, a := range accounts {
+		if a.ID == id {
+			a.Enabled = false
+			a.BanStatus = "SUSPENDED"
+			a.BanReason = "TEMPORARILY_SUSPENDED"
+			a.BanTime = time.Now().Unix()
+			config.UpdateAccount(id, a)
+			break
+		}
+	}
+	h.pool.Reload()
 }
 
 // ensureValidToken 确保 token 有效

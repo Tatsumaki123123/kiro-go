@@ -199,6 +199,18 @@ type InferenceConfig struct {
 	TopP        float64 `json:"topP,omitempty"`
 }
 
+// ==================== 错误类型 ====================
+
+// ErrAccountSuspended 账号被暂停，调用方应禁用该账号并换号重试
+type ErrAccountSuspended struct {
+	UserID  string
+	Message string
+}
+
+func (e *ErrAccountSuspended) Error() string {
+	return fmt.Sprintf("account suspended (userId=%s): %s", e.UserID, e.Message)
+}
+
 // ==================== 流式回调 ====================
 
 // KiroStreamCallback 流式响应回调
@@ -285,7 +297,27 @@ func CallKiroAPI(account *config.Account, payload *KiroPayload, callback *KiroSt
 			errBody, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			lastErr = fmt.Errorf("HTTP %d from %s: %s", resp.StatusCode, ep.Name, string(errBody))
-			// 认证错误不继续尝试
+
+			// 检测账号暂停
+			if resp.StatusCode == 403 {
+				var errResp struct {
+					Message string `json:"message"`
+					Reason  string `json:"reason"`
+				}
+				if json.Unmarshal(errBody, &errResp) == nil && errResp.Reason == "TEMPORARILY_SUSPENDED" {
+					// 提取 userId
+					userID := ""
+					if idx := strings.Index(errResp.Message, "Your User ID ("); idx != -1 {
+						rest := errResp.Message[idx+14:]
+						if end := strings.Index(rest, ")"); end != -1 {
+							userID = rest[:end]
+						}
+					}
+					return &ErrAccountSuspended{UserID: userID, Message: errResp.Message}
+				}
+			}
+
+			// 其他认证错误不继续尝试
 			if resp.StatusCode == 401 || resp.StatusCode == 403 {
 				return lastErr
 			}

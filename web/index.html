@@ -21,7 +21,7 @@
         }
 
         .container {
-            max-width: 1100px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 16px;
         }
@@ -198,22 +198,25 @@
         }
 
         .badge {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 20px;
             font-size: 11px;
-            font-weight: 500;
+            font-weight: 600;
             white-space: nowrap;
+            letter-spacing: 0.2px;
         }
 
         .badge-success {
             background: #dcfce7;
-            color: #16a34a;
+            color: #15803d;
         }
 
         .badge-warning {
             background: #fef3c7;
-            color: #d97706;
+            color: #b45309;
         }
 
         .badge-error {
@@ -223,7 +226,12 @@
 
         .badge-info {
             background: #ede9fe;
-            color: #7c3aed;
+            color: #6d28d9;
+        }
+
+        .badge-neutral {
+            background: #f1f5f9;
+            color: #475569;
         }
 
         .badge-pro {
@@ -242,24 +250,38 @@
         }
 
         .badge-free {
-            background: #6b7280;
-            color: white;
+            background: #e2e8f0;
+            color: #475569;
         }
 
         .badge-trial {
-            background: #10b981;
-            color: white;
+            background: #d1fae5;
+            color: #065f46;
         }
 
         .badge-banned {
-            background: #dc2626;
-            color: white;
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
         }
 
         .badge-suspended {
-            background: #f59e0b;
-            color: white;
+            background: #fff7ed;
+            color: #c2410c;
+            border: 1px solid #fed7aa;
         }
+
+        .badge-disabled {
+            background: #f1f5f9;
+            color: #64748b;
+            border: 1px solid #e2e8f0;
+        }
+
+        /* 账号卡片状态颜色 */
+        .account-card.status-normal   { border-left-color: #7c3aed; }
+        .account-card.status-disabled { border-left-color: #94a3b8; background: #f8fafc; }
+        .account-card.status-suspended{ border-left-color: #f97316; background: #fffbf5; }
+        .account-card.status-banned   { border-left-color: #ef4444; background: #fff8f8; }
 
         .modal {
             display: none;
@@ -448,9 +470,16 @@
             background: #fff;
             border-radius: 12px;
             padding: 14px;
-            margin-bottom: 12px;
+            margin-bottom: 0;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             border-left: 4px solid #7c3aed;
+        }
+
+        #accountsList {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            padding: 0 20px 20px;
         }
 
         .account-header {
@@ -722,9 +751,119 @@
             gap: 10px;
         }
 
+        /* 自定义筛选下拉 */
+        .filter-select-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        .filter-select-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 13px;
+            color: #374151;
+            font-weight: 500;
+            white-space: nowrap;
+            user-select: none;
+            transition: border-color 0.15s, box-shadow 0.15s;
+            min-width: 110px;
+        }
+
+        .filter-select-btn:hover {
+            border-color: #7c3aed;
+        }
+
+        .filter-select-btn.open {
+            border-color: #7c3aed;
+            box-shadow: 0 0 0 3px rgba(124,58,237,0.1);
+        }
+
+        .filter-select-btn .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .filter-select-btn .chevron {
+            margin-left: auto;
+            color: #94a3b8;
+            transition: transform 0.15s;
+        }
+
+        .filter-select-btn.open .chevron {
+            transform: rotate(180deg);
+        }
+
+        .filter-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            right: 0;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            z-index: 100;
+            min-width: 160px;
+            overflow: hidden;
+            padding: 4px;
+        }
+
+        .filter-dropdown.open {
+            display: block;
+        }
+
+        .filter-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #374151;
+            font-weight: 500;
+            transition: background 0.1s;
+        }
+
+        .filter-option:hover {
+            background: #f5f3ff;
+            color: #7c3aed;
+        }
+
+        .filter-option.active {
+            background: #ede9fe;
+            color: #6d28d9;
+        }
+
+        .filter-option .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .filter-option .count {
+            margin-left: auto;
+            font-size: 11px;
+            color: #94a3b8;
+            font-weight: 400;
+        }
+
         @media (max-width: 640px) {
             .container {
                 padding: 12px;
+            }
+
+            #accountsList {
+                grid-template-columns: 1fr;
             }
 
             .stats-grid {
@@ -943,13 +1082,42 @@
                         <div style="height:16px;width:1px;background:#e2e8f0;flex-shrink:0"></div>
                     </div>
                     <div style="display:flex;gap:6px;align-items:center;margin-left:auto;flex-shrink:0">
-                        <input type="text" id="filterSearch" oninput="onFilterChange()" style="width:260px;padding:8px 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:14px;outline:none" data-i18n-placeholder="filter.search">
-                        <select id="filterStatusSelect" onchange="onFilterChange()" style="padding:4px 6px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#fff;cursor:pointer">
-                            <option value="all" data-i18n="filter.all"></option>
-                            <option value="enabled" data-i18n="filter.enabled"></option>
-                            <option value="disabled" data-i18n="filter.disabled"></option>
-                            <option value="banned" data-i18n="filter.banned"></option>
-                        </select>
+                        <button class="btn btn-sm btn-danger" onclick="deleteDisabledAccounts()" data-i18n="accounts.deleteDisabled"></button>
+                        <input type="text" id="filterSearch" oninput="onFilterChange()" style="width:200px;padding:6px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none" data-i18n-placeholder="filter.search">
+                        <div class="filter-select-wrapper">
+                            <div class="filter-select-btn" id="filterSelectBtn" onclick="toggleFilterDropdown()">
+                                <span class="dot" id="filterDot" style="background:#94a3b8"></span>
+                                <span id="filterSelectLabel" data-i18n="filter.all"></span>
+                                <svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                            </div>
+                            <div class="filter-dropdown" id="filterDropdown">
+                                <div class="filter-option active" data-value="all" onclick="selectFilter(this)">
+                                    <span class="dot" style="background:#94a3b8"></span>
+                                    <span data-i18n="filter.all"></span>
+                                    <span class="count" id="countAll"></span>
+                                </div>
+                                <div class="filter-option" data-value="enabled" onclick="selectFilter(this)">
+                                    <span class="dot" style="background:#7c3aed"></span>
+                                    <span data-i18n="filter.enabled"></span>
+                                    <span class="count" id="countEnabled"></span>
+                                </div>
+                                <div class="filter-option" data-value="disabled" onclick="selectFilter(this)">
+                                    <span class="dot" style="background:#94a3b8"></span>
+                                    <span data-i18n="filter.disabled"></span>
+                                    <span class="count" id="countDisabled"></span>
+                                </div>
+                                <div class="filter-option" data-value="suspended" onclick="selectFilter(this)">
+                                    <span class="dot" style="background:#f97316"></span>
+                                    <span data-i18n="filter.suspended"></span>
+                                    <span class="count" id="countSuspended"></span>
+                                </div>
+                                <div class="filter-option" data-value="banned" onclick="selectFilter(this)">
+                                    <span class="dot" style="background:#ef4444"></span>
+                                    <span data-i18n="filter.banned"></span>
+                                    <span class="count" id="countBanned"></span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div id="accountsList"></div>
@@ -1094,6 +1262,7 @@
                 'accounts.enable': '启用',
                 'accounts.disable': '禁用',
                 'accounts.delete': '删除',
+                'accounts.deleteDisabled': '删除已禁用',
                 'accounts.requests': '请求',
                 'accounts.tokens': 'Tokens',
                 'accounts.credits': 'Credits',
@@ -1107,6 +1276,8 @@
                 'accounts.suspended': '已暂停',
                 'accounts.refreshFailed': '刷新失败',
                 'accounts.confirmDelete': '确定删除？',
+                'accounts.confirmDeleteDisabled': '确定删除全部 {0} 个已禁用账号？此操作不可撤销。',
+                'accounts.noDisabled': '没有已禁用的账号',
                 'accounts.mainQuota': '主配额',
                 'accounts.trialQuota': '试用配额',
                 'accounts.trial': '试用中',
@@ -1277,7 +1448,8 @@
                 'filter.search': '搜索邮箱/昵称...',
                 'filter.all': '全部',
                 'filter.enabled': '已启用',
-                'filter.disabled': '已禁用',
+                'filter.disabled': '已禁用（手动）',
+                'filter.suspended': '已暂停（官方）',
                 'filter.banned': '已封禁',
                 'accounts.weight': '权重',
                 'detail.weight': '请求权重',
@@ -1309,6 +1481,7 @@
                 'accounts.enable': 'Enable',
                 'accounts.disable': 'Disable',
                 'accounts.delete': 'Delete',
+                'accounts.deleteDisabled': 'Delete Disabled',
                 'accounts.requests': 'Requests',
                 'accounts.tokens': 'Tokens',
                 'accounts.credits': 'Credits',
@@ -1322,6 +1495,8 @@
                 'accounts.suspended': 'Suspended',
                 'accounts.refreshFailed': 'Refresh failed',
                 'accounts.confirmDelete': 'Confirm delete?',
+                'accounts.confirmDeleteDisabled': 'Delete all {0} disabled accounts? This cannot be undone.',
+                'accounts.noDisabled': 'No disabled accounts found',
                 'accounts.copyJSON': 'Copy JSON',
                 'accounts.copyJSONSuccess': 'JSON copied to clipboard',
                 'time.expired': 'Expired',
@@ -1482,7 +1657,8 @@
                 'filter.search': 'Search email/nickname...',
                 'filter.all': 'All',
                 'filter.enabled': 'Enabled',
-                'filter.disabled': 'Disabled',
+                'filter.disabled': 'Disabled (Manual)',
+                'filter.suspended': 'Suspended (Official)',
                 'filter.banned': 'Banned',
                 'accounts.weight': 'Weight',
                 'detail.weight': 'Request Weight',
@@ -1518,6 +1694,13 @@
             document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
                 el.placeholder = t(el.dataset.i18nPlaceholder);
             });
+            // 同步自定义筛选按钮显示文字
+            const activeOpt = document.querySelector('.filter-option.active');
+            if (activeOpt) {
+                const label = activeOpt.querySelector('[data-i18n]');
+                const btnLabel = document.getElementById('filterSelectLabel');
+                if (label && btnLabel) btnLabel.textContent = label.textContent;
+            }
         }
 
         let password = localStorage.getItem('admin_password') || '';
@@ -1663,25 +1846,80 @@
         async function loadAccounts() {
             const res = await fetch('/admin/api/accounts', { headers: { 'X-Admin-Password': password } });
             accountsData = await res.json();
+            updateFilterCounts();
             renderAccounts();
         }
         function getFilteredAccounts() {
             return accountsData.filter(a => {
+                const isSuspended = a.banStatus === 'SUSPENDED';
+                const isBanned = a.banStatus === 'BANNED';
+                const isManualDisabled = !a.enabled && !isSuspended && !isBanned;
+
                 if (filterStatus === 'enabled' && !a.enabled) return false;
-                if (filterStatus === 'disabled' && (a.enabled || (a.banStatus && a.banStatus !== 'ACTIVE'))) return false;
-                if (filterStatus === 'banned' && (!a.banStatus || a.banStatus === 'ACTIVE')) return false;
+                if (filterStatus === 'disabled' && !isManualDisabled) return false;
+                if (filterStatus === 'suspended' && !isSuspended) return false;
+                if (filterStatus === 'banned' && !isBanned) return false;
                 if (filterKeyword) {
                     const kw = filterKeyword.toLowerCase();
                     const email = (a.email || '').toLowerCase();
-                    if (!email.includes(kw)) return false;
+                    const nick = (a.nickname || '').toLowerCase();
+                    if (!email.includes(kw) && !nick.includes(kw)) return false;
                 }
                 return true;
             });
         }
         function onFilterChange() {
             filterKeyword = document.getElementById('filterSearch').value;
-            filterStatus = document.getElementById('filterStatusSelect').value;
             renderAccounts();
+        }
+        // 自定义下拉控制
+        const filterDotColors = {
+            all: '#94a3b8', enabled: '#7c3aed',
+            disabled: '#94a3b8', suspended: '#f97316', banned: '#ef4444'
+        };
+        function toggleFilterDropdown() {
+            const btn = document.getElementById('filterSelectBtn');
+            const dd = document.getElementById('filterDropdown');
+            btn.classList.toggle('open');
+            dd.classList.toggle('open');
+        }
+        function selectFilter(el) {
+            filterStatus = el.dataset.value;
+            // 更新 active 样式
+            document.querySelectorAll('.filter-option').forEach(o => o.classList.remove('active'));
+            el.classList.add('active');
+            // 更新按钮显示
+            const label = el.querySelector('[data-i18n]');
+            document.getElementById('filterSelectLabel').textContent = label ? label.textContent : '';
+            document.getElementById('filterDot').style.background = filterDotColors[filterStatus] || '#94a3b8';
+            // 关闭下拉
+            document.getElementById('filterSelectBtn').classList.remove('open');
+            document.getElementById('filterDropdown').classList.remove('open');
+            renderAccounts();
+        }
+        // 点击外部关闭下拉
+        document.addEventListener('click', function(e) {
+            const wrapper = document.querySelector('.filter-select-wrapper');
+            if (wrapper && !wrapper.contains(e.target)) {
+                document.getElementById('filterSelectBtn')?.classList.remove('open');
+                document.getElementById('filterDropdown')?.classList.remove('open');
+            }
+        });
+        function updateFilterCounts() {
+            const counts = { all: 0, enabled: 0, disabled: 0, suspended: 0, banned: 0 };
+            accountsData.forEach(a => {
+                counts.all++;
+                const isSuspended = a.banStatus === 'SUSPENDED';
+                const isBanned = a.banStatus === 'BANNED';
+                if (a.enabled && !isSuspended && !isBanned) counts.enabled++;
+                else if (isSuspended) counts.suspended++;
+                else if (isBanned) counts.banned++;
+                else counts.disabled++;
+            });
+            Object.keys(counts).forEach(k => {
+                const el = document.getElementById('count' + k.charAt(0).toUpperCase() + k.slice(1));
+                if (el) el.textContent = counts[k] || '';
+            });
         }
         function toggleSelectAll(checked) {
             const filtered = getFilteredAccounts();
@@ -1755,7 +1993,15 @@
                 const isSelected = selectedAccounts.has(a.id);
                 const weightVal = a.weight || 0;
                 const weightBadge = weightVal >= 2 ? '<span class="badge" style="background:#f59e0b;color:#fff">W:' + weightVal + '</span>' : '';
-                return '<div class="account-card" style="' + (isSelected ? 'border-color:#7c3aed;background:#faf5ff' : '') + '">' +
+                const isSuspended = a.banStatus === 'SUSPENDED';
+                const isBanned = a.banStatus === 'BANNED';
+                const isManualDisabled = !a.enabled && !isSuspended && !isBanned;
+                let statusClass = 'status-normal';
+                if (isBanned) statusClass = 'status-banned';
+                else if (isSuspended) statusClass = 'status-suspended';
+                else if (isManualDisabled) statusClass = 'status-disabled';
+                const cardClass = 'account-card ' + statusClass;
+                return '<div class="' + cardClass + '" style="' + (isSelected ? 'border-color:#7c3aed !important;background:#faf5ff !important' : '') + '">' +
                     '<div class="account-header">' +
                     '<div class="account-info" style="display:flex;align-items:center;gap:8px">' +
                     '<input type="checkbox" ' + (isSelected ? 'checked' : '') + ' onchange="toggleSelectAccount(\'' + a.id + '\')" style="cursor:pointer;width:16px;height:16px;flex-shrink:0">' +
@@ -1826,39 +2072,29 @@
             return method;
         }
         function getStatusBadge(a) {
+            const isBanned = a.banStatus === 'BANNED';
+            const isSuspended = a.banStatus === 'SUSPENDED';
+            const hasToken = a.hasToken;
+            const isExpired = a.expiresAt && a.expiresAt < Date.now() / 1000;
+
             let badges = [];
 
-            // 检查是否为封禁状态
-            const isBanned = a.banStatus && a.banStatus !== 'ACTIVE';
-
             if (isBanned) {
-                // 封禁账号：显示"封禁 + 禁用"
-                if (a.banStatus === 'BANNED') {
-                    badges.push('<span class="badge badge-banned">' + t('accounts.banned') + '</span>');
-                } else if (a.banStatus === 'SUSPENDED') {
-                    badges.push('<span class="badge badge-suspended">' + t('accounts.suspended') + '</span>');
-                }
-                // 封禁账号必定显示禁用状态
-                badges.push('<span class="badge badge-warning">' + t('accounts.disabled') + '</span>');
+                badges.push('<span class="badge badge-banned">🚫 ' + t('accounts.banned') + '</span>');
+            } else if (isSuspended) {
+                badges.push('<span class="badge badge-suspended">⚠️ ' + t('accounts.suspended') + '</span>');
+            } else if (!hasToken) {
+                badges.push('<span class="badge badge-error">' + t('accounts.noToken') + '</span>');
+            } else if (isExpired) {
+                badges.push('<span class="badge badge-warning">' + t('accounts.expired') + '</span>');
             } else {
-                // 正常账号：显示"正常 + 启用/禁用"
+                badges.push('<span class="badge badge-success">✓ ' + t('accounts.normal') + '</span>');
+            }
 
-                // 检查Token状态
-                if (!a.hasToken) {
-                    badges.push('<span class="badge badge-error">' + t('accounts.noToken') + '</span>');
-                } else if (a.expiresAt && a.expiresAt < Date.now() / 1000) {
-                    badges.push('<span class="badge badge-warning">' + t('accounts.expired') + '</span>');
-                } else {
-                    // 有效Token的正常账号显示"正常"
-                    badges.push('<span class="badge badge-success">' + t('accounts.normal') + '</span>');
-                }
-
-                // 显示启用/禁用状态
-                if (a.enabled) {
-                    badges.push('<span class="badge badge-info">' + t('accounts.enabled') + '</span>');
-                } else {
-                    badges.push('<span class="badge badge-warning">' + t('accounts.disabled') + '</span>');
-                }
+            if (!a.enabled && !isBanned && !isSuspended) {
+                badges.push('<span class="badge badge-disabled">' + t('accounts.disabled') + '</span>');
+            } else if (a.enabled && !isBanned && !isSuspended) {
+                badges.push('<span class="badge badge-info">' + t('accounts.enabled') + '</span>');
             }
 
             return badges.join('');
@@ -2091,6 +2327,15 @@
         async function deleteAccount(id) {
             if (!confirm(t('accounts.confirmDelete'))) return;
             await fetch('/admin/api/accounts/' + id, { method: 'DELETE', headers: { 'X-Admin-Password': password } });
+            loadAccounts(); loadStats();
+        }
+        async function deleteDisabledAccounts() {
+            const disabled = accountsData.filter(a => !a.enabled || (a.banStatus && a.banStatus !== 'ACTIVE'));
+            if (disabled.length === 0) { alert(t('accounts.noDisabled')); return; }
+            if (!confirm(t('accounts.confirmDeleteDisabled', disabled.length))) return;
+            for (const a of disabled) {
+                await fetch('/admin/api/accounts/' + a.id, { method: 'DELETE', headers: { 'X-Admin-Password': password } });
+            }
             loadAccounts(); loadStats();
         }
         function formatNum(n) {
