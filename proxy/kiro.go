@@ -65,10 +65,7 @@ var (
 
 // getHTTPClient 根据账号的 ProxyURL 返回合适的 HTTP 客户端
 func getHTTPClient(account *config.Account) *http.Client {
-	log.Printf("[DEBUG] getHTTPClient called for account: %s, proxyURL: %q\n", account.Email, account.ProxyURL)
-	
 	if account.ProxyURL == "" {
-		log.Printf("[DEBUG] No proxy configured, using default client\n")
 		return kiroHttpClient
 	}
 
@@ -76,11 +73,9 @@ func getHTTPClient(account *config.Account) *http.Client {
 	defer proxyClientsMu.Unlock()
 
 	if c, ok := proxyClients[account.ProxyURL]; ok {
-		log.Printf("[KiroAPI] Using cached proxy client %q for account %s\n", account.ProxyURL, account.Email)
 		return c
 	}
 
-	log.Printf("[DEBUG] Creating new proxy client for %q\n", account.ProxyURL)
 	transport, err := buildProxyTransport(account.ProxyURL)
 	if err != nil {
 		log.Printf("[KiroAPI] Invalid proxy URL %q: %v, using default client\n", account.ProxyURL, err)
@@ -93,10 +88,10 @@ func getHTTPClient(account *config.Account) *http.Client {
 	}
 	proxyClients[account.ProxyURL] = c
 	log.Printf("[KiroAPI] ✓ Created proxy client for %q (account: %s)\n", account.ProxyURL, account.Email)
-	
-	// 检测代理出口 IP
+
+	// 检测代理出口 IP（仅首次创建时触发一次）
 	go detectProxyIP(c, account.ProxyURL, account.Email)
-	
+
 	return c
 }
 
@@ -129,9 +124,8 @@ func InvalidateProxyClient(proxyURL string) {
 	delete(proxyClients, proxyURL)
 }
 
-// detectProxyIP 检测代理的出口 IP 地址
+// detectProxyIP 检测代理的出口 IP 地址（仅首次创建客户端时调用一次）
 func detectProxyIP(client *http.Client, proxyURL, accountEmail string) {
-	// 使用多个 IP 检测服务，提高成功率
 	ipServices := []string{
 		"https://api.ipify.org?format=json",
 		"https://ifconfig.me/ip",
@@ -146,12 +140,11 @@ func detectProxyIP(client *http.Client, proxyURL, accountEmail string) {
 		}
 		req.Header.Set("User-Agent", "curl/7.68.0")
 
-		// 设置较短的超时时间
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
 		req = req.WithContext(ctx)
 
 		resp, err := client.Do(req)
+		cancel() // 立即释放，不用 defer
 		if err != nil {
 			continue
 		}
@@ -163,7 +156,7 @@ func detectProxyIP(client *http.Client, proxyURL, accountEmail string) {
 		}
 
 		ip := strings.TrimSpace(string(body))
-		
+
 		// 如果是 JSON 格式，解析出 IP
 		if strings.HasPrefix(ip, "{") {
 			var result struct {

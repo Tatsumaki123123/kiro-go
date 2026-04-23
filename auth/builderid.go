@@ -21,6 +21,8 @@ type BuilderIdSession struct {
 	Interval        int
 	ExpiresAt       time.Time
 	Region          string
+	ProxyURL        string // 本次登录使用的代理地址
+	ProxyIP         string // 代理出口 IP
 }
 
 var (
@@ -29,7 +31,8 @@ var (
 )
 
 // StartBuilderIdLogin 开始 Builder ID 登录
-func StartBuilderIdLogin(region string) (*BuilderIdSession, error) {
+// proxyURL: 可选，通过该代理发起 AWS OIDC 请求（如 socks5://user:pass@host:port）
+func StartBuilderIdLogin(region, proxyURL string) (*BuilderIdSession, error) {
 	if region == "" {
 		region = "us-east-1"
 	}
@@ -57,7 +60,7 @@ func StartBuilderIdLogin(region string) (*BuilderIdSession, error) {
 	regReq, _ := http.NewRequest("POST", oidcBase+"/client/register", bytes.NewReader(regBody))
 	regReq.Header.Set("Content-Type", "application/json")
 
-	client := httpClient
+	client := GetHTTPClientWithProxy(proxyURL)
 	regResp, err := client.Do(regReq)
 	if err != nil {
 		return nil, fmt.Errorf("register client failed: %v", err)
@@ -133,6 +136,7 @@ func StartBuilderIdLogin(region string) (*BuilderIdSession, error) {
 		Interval:        authResult.Interval,
 		ExpiresAt:       time.Now().Add(time.Duration(authResult.ExpiresIn) * time.Second),
 		Region:          region,
+		ProxyURL:        proxyURL,
 	}
 
 	builderIdMu.Lock()
@@ -146,20 +150,20 @@ func StartBuilderIdLogin(region string) (*BuilderIdSession, error) {
 }
 
 // PollBuilderIdAuth 轮询 Builder ID 授权状态
-func PollBuilderIdAuth(sessionID string) (accessToken, refreshToken, clientID, clientSecret, region string, expiresIn int, status string, err error) {
+func PollBuilderIdAuth(sessionID string) (accessToken, refreshToken, clientID, clientSecret, region, proxyURL, proxyIP string, expiresIn int, status string, err error) {
 	builderIdMu.RLock()
 	session, exists := builderIdSessions[sessionID]
 	builderIdMu.RUnlock()
 
 	if !exists {
-		return "", "", "", "", "", 0, "", fmt.Errorf("session not found or expired")
+		return "", "", "", "", "", "", "", 0, "", fmt.Errorf("session not found or expired")
 	}
 
 	if time.Now().After(session.ExpiresAt) {
 		builderIdMu.Lock()
 		delete(builderIdSessions, sessionID)
 		builderIdMu.Unlock()
-		return "", "", "", "", "", 0, "", fmt.Errorf("authorization expired")
+		return "", "", "", "", "", "", "", 0, "", fmt.Errorf("authorization expired")
 	}
 
 	oidcBase := fmt.Sprintf("https://oidc.%s.amazonaws.com", session.Region)
@@ -175,10 +179,10 @@ func PollBuilderIdAuth(sessionID string) (accessToken, refreshToken, clientID, c
 	tokenReq, _ := http.NewRequest("POST", oidcBase+"/token", bytes.NewReader(tokenBody))
 	tokenReq.Header.Set("Content-Type", "application/json")
 
-	client := httpClient
+	client := GetHTTPClientWithProxy(session.ProxyURL)
 	tokenResp, err := client.Do(tokenReq)
 	if err != nil {
-		return "", "", "", "", "", 0, "", fmt.Errorf("token request failed: %v", err)
+		return "", "", "", "", "", "", "", 0, "", fmt.Errorf("token request failed: %v", err)
 	}
 	defer tokenResp.Body.Close()
 
@@ -189,7 +193,7 @@ func PollBuilderIdAuth(sessionID string) (accessToken, refreshToken, clientID, c
 			ExpiresIn    int    `json:"expiresIn"`
 		}
 		if err := json.NewDecoder(tokenResp.Body).Decode(&tokenResult); err != nil {
-			return "", "", "", "", "", 0, "", fmt.Errorf("parse token response failed: %v", err)
+			return "", "", "", "", "", "", "", 0, "", fmt.Errorf("parse token response failed: %v", err)
 		}
 
 		// 清理会话
@@ -197,7 +201,7 @@ func PollBuilderIdAuth(sessionID string) (accessToken, refreshToken, clientID, c
 		delete(builderIdSessions, sessionID)
 		builderIdMu.Unlock()
 
-		return tokenResult.AccessToken, tokenResult.RefreshToken, session.ClientID, session.ClientSecret, session.Region, tokenResult.ExpiresIn, "completed", nil
+		return tokenResult.AccessToken, tokenResult.RefreshToken, session.ClientID, session.ClientSecret, session.Region, session.ProxyURL, session.ProxyIP, tokenResult.ExpiresIn, "completed", nil
 	}
 
 	if tokenResp.StatusCode == 400 {
@@ -208,7 +212,7 @@ func PollBuilderIdAuth(sessionID string) (accessToken, refreshToken, clientID, c
 
 		switch errResult.Error {
 		case "authorization_pending":
-			return "", "", "", "", "", 0, "pending", nil
+			return "", "", "", "", "", "", "", 0, "pending", nil
 		case "slow_down":
 			// 增加轮询间隔
 			builderIdMu.Lock()
@@ -216,23 +220,23 @@ func PollBuilderIdAuth(sessionID string) (accessToken, refreshToken, clientID, c
 				s.Interval += 5
 			}
 			builderIdMu.Unlock()
-			return "", "", "", "", "", 0, "slow_down", nil
+			return "", "", "", "", "", "", "", 0, "slow_down", nil
 		case "expired_token":
 			builderIdMu.Lock()
 			delete(builderIdSessions, sessionID)
 			builderIdMu.Unlock()
-			return "", "", "", "", "", 0, "", fmt.Errorf("device code expired")
+			return "", "", "", "", "", "", "", 0, "", fmt.Errorf("device code expired")
 		case "access_denied":
 			builderIdMu.Lock()
 			delete(builderIdSessions, sessionID)
 			builderIdMu.Unlock()
-			return "", "", "", "", "", 0, "", fmt.Errorf("user denied authorization")
+			return "", "", "", "", "", "", "", 0, "", fmt.Errorf("user denied authorization")
 		default:
-			return "", "", "", "", "", 0, "", fmt.Errorf("authorization error: %s", errResult.Error)
+			return "", "", "", "", "", "", "", 0, "", fmt.Errorf("authorization error: %s", errResult.Error)
 		}
 	}
 
-	return "", "", "", "", "", 0, "", fmt.Errorf("unexpected response: %d", tokenResp.StatusCode)
+	return "", "", "", "", "", "", "", 0, "", fmt.Errorf("unexpected response: %d", tokenResp.StatusCode)
 }
 
 // GetBuilderIdSession 获取会话信息

@@ -1369,6 +1369,12 @@
                 'builderid.open': '打开',
                 'builderid.waiting': '等待授权中...',
                 'builderid.success': '登录成功',
+                'builderid.fetchingProxy': '正在获取代理...',
+                'builderid.proxyHint': '将自动分配住宅代理，所有 AWS 请求通过代理发出',
+                'builderid.proxyInfo': '代理信息',
+                'builderid.proxyIp': 'IP',
+                'builderid.proxyLoc': '地址',
+                'builderid.proxyUrl': '代理 URL',
                 'iam.startUrl': 'Start URL',
                 'iam.loginUrl': '登录链接',
                 'iam.completeLogin': '请在浏览器中完成登录，然后粘贴回调 URL',
@@ -1578,6 +1584,12 @@
                 'builderid.open': 'Open',
                 'builderid.waiting': 'Waiting for authorization...',
                 'builderid.success': 'Login successful',
+                'builderid.fetchingProxy': 'Fetching proxy...',
+                'builderid.proxyHint': 'A residential proxy will be auto-assigned. All AWS requests go through the proxy.',
+                'builderid.proxyInfo': 'Proxy Info',
+                'builderid.proxyIp': 'IP',
+                'builderid.proxyLoc': 'Location',
+                'builderid.proxyUrl': 'Proxy URL',
                 'iam.startUrl': 'Start URL',
                 'iam.loginUrl': 'Login URL',
                 'iam.completeLogin': 'Complete login in browser, then paste callback URL',
@@ -2027,6 +2039,12 @@
                     '</div>' +
                     (a.usageLimit > 0 ? '<div class="account-usage"><div class="usage-label">' + t('accounts.mainQuota') + '</div><div class="usage-bar"><div class="usage-fill ' + usageClass + '" style="width:' + usagePercent + '%"></div></div><div class="usage-text"><span>' + (a.usageCurrent?.toFixed(1) || 0) + ' / ' + (a.usageLimit?.toFixed(0) || 0) + '</span><span>' + usagePercent.toFixed(1) + '%</span></div></div>' : '') +
                     (a.trialUsageLimit > 0 ? '<div class="account-usage"><div class="usage-label">' + t('accounts.trialQuota') + ' ' + formatTrialExpiry(a.trialExpiresAt) + '</div><div class="usage-bar"><div class="usage-fill ' + trialUsageClass + '" style="width:' + trialUsagePercent + '%"></div></div><div class="usage-text"><span>' + (a.trialUsageCurrent?.toFixed(1) || 0) + ' / ' + (a.trialUsageLimit?.toFixed(0) || 0) + '</span><span>' + trialUsagePercent.toFixed(1) + '%</span></div></div>' : '') +
+                    (a.proxyUrl ? '<div style="margin:8px 0 0;padding:6px 8px;background:#f0fdf4;border-radius:6px;font-size:11px;color:#15803d;display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
+                        '<span>🌐</span>' +
+                        (a.proxyIp ? '<span style="font-family:monospace;font-weight:700">' + a.proxyIp + '</span>' : '') +
+                        (a.proxyLocation ? '<span style="color:#64748b">· ' + a.proxyLocation + '</span>' : '') +
+                        '<span style="font-family:monospace;color:#94a3b8;font-size:10px">' + (a.proxyUrl.replace(/socks5:\/\/[^:]+:[^@]+@/, 'socks5://***@')) + '</span>' +
+                        '</div>' : '') +
                     '<div class="account-stats">' +
                     '<div class="account-stat"><div class="account-stat-value">' + (a.requestCount || 0) + '</div><div class="account-stat-label">' + t('accounts.requests') + '</div></div>' +
                     '<div class="account-stat"><div class="account-stat-value">' + formatNum(a.totalTokens || 0) + '</div><div class="account-stat-label">' + t('accounts.tokens') + '</div></div>' +
@@ -2140,7 +2158,9 @@
                 '<div class="detail-section"><h4>' + t('detail.proxyUrl') + '</h4><div class="machine-id-row">' +
                 '<input type="text" id="proxyUrlInput" value="' + (a.proxyUrl || 'socks5://') + '" placeholder="' + t('detail.proxyUrlPlaceholder') + '" style="flex:1">' +
                 '<button class="btn btn-sm btn-primary" onclick="saveProxyUrl(\'' + id + '\')">' + t('common.saved').split(' ')[0] + '</button>' +
-                '</div><div style="color:#64748b;font-size:12px;margin-top:4px">' + t('detail.proxyUrlHint') + '</div></div>' +
+                '</div><div style="color:#64748b;font-size:12px;margin-top:4px">' + t('detail.proxyUrlHint') + '</div>' +
+                (a.proxyLocation ? '<div style="margin-top:8px;padding:8px 10px;background:#f0fdf4;border-radius:6px;font-size:12px;color:#15803d">🌐 ' + a.proxyLocation + '</div>' : '') +
+                '</div>' +
                 '<div class="detail-section"><h4>' + t('detail.subscription') + '</h4><div class="detail-grid">' +
                 '<div class="detail-item"><div class="detail-label">' + t('detail.subscriptionType') + '</div><div class="detail-value">' + (a.subscriptionTitle || a.subscriptionType || '-') + '</div></div>' +
                 '<div class="detail-item"><div class="detail-label">' + t('detail.tokenExpiry') + '</div><div class="detail-value">' + (a.expiresAt ? new Date(a.expiresAt * 1000).toLocaleString() : '-') + '</div></div>' +
@@ -2420,8 +2440,16 @@
                 body.innerHTML =
                     '<p style="font-size:13px;color:#64748b;margin-bottom:16px">' + t('modal.builderIdDesc') + '</p>' +
                     '<div id="builderIdStep1"><div class="form-group"><label>Region</label><input type="text" id="builderIdRegion" value="us-east-1"></div>' +
+                    '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:#15803d">🔒 ' + t('builderid.proxyHint') + '</div>' +
                     '<div class="modal-footer"><button class="btn btn-secondary" onclick="showModal(\'add\')">' + t('common.back') + '</button><button class="btn btn-primary" onclick="startBuilderIdLogin()">' + t('builderid.startLogin') + '</button></div></div>' +
                     '<div id="builderIdStep2" class="hidden">' +
+                    '<div id="builderIdProxyInfo" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;margin-bottom:12px">' +
+                    '<div style="font-size:12px;color:#15803d;margin-bottom:8px"><b>🌐 ' + t('builderid.proxyInfo') + '</b></div>' +
+                    '<div style="display:flex;flex-direction:column;gap:6px;font-size:12px">' +
+                    '<div style="display:flex;align-items:center;gap:6px"><span style="color:#64748b;min-width:60px">' + t('builderid.proxyIp') + ':</span><span id="builderIdProxyIp" style="font-family:monospace;font-weight:600;color:#15803d"></span></div>' +
+                    '<div style="display:flex;align-items:center;gap:6px"><span style="color:#64748b;min-width:60px">' + t('builderid.proxyLoc') + ':</span><span id="builderIdProxyLoc" style="color:#15803d"></span></div>' +
+                    '<div style="display:flex;align-items:center;gap:6px"><span style="color:#64748b;min-width:60px">' + t('builderid.proxyUrl') + ':</span><span id="builderIdProxyUrl" style="font-family:monospace;font-size:11px;color:#15803d;flex:1;word-break:break-all"></span><button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById(\'builderIdProxyUrl\').textContent);alert(\'' + t('common.copied') + '\')" style="padding:2px 8px;font-size:11px">' + t('common.copy') + '</button></div>' +
+                    '</div></div>' +
                     '<div class="message" style="background:#ede9fe;color:#7c3aed;text-align:center"><p style="font-size:18px;font-weight:600;margin-bottom:8px" id="builderIdUserCode"></p><p style="font-size:12px">' + t('builderid.verifyCode') + '</p></div>' +
                     '<div class="form-group" style="margin-top:16px"><label>' + t('builderid.verifyUrl') + '</label><div class="endpoint" style="margin-bottom:0"><span id="builderIdVerifyUrl" style="font-size:12px"></span></div>' +
                     '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-sm btn-secondary" style="flex:1" onclick="window.open(document.getElementById(\'builderIdVerifyUrl\').textContent,\'_blank\')">' + t('builderid.open') + '</button><button class="btn btn-sm btn-secondary" style="flex:1" onclick="navigator.clipboard.writeText(document.getElementById(\'builderIdVerifyUrl\').textContent);alert(\'' + t('common.copied') + '\')">' + t('common.copy') + '</button></div></div>' +
@@ -2571,12 +2599,24 @@
         let builderIdPollTimer = null;
         async function startBuilderIdLogin() {
             const region = document.getElementById('builderIdRegion').value || 'us-east-1';
+            // 显示 loading 状态
+            const startBtn = document.querySelector('#builderIdStep1 .btn-primary');
+            if (startBtn) { startBtn.disabled = true; startBtn.textContent = t('builderid.fetchingProxy'); }
             const res = await fetch('/admin/api/auth/builderid/start', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Password': password }, body: JSON.stringify({ region }) });
             const d = await res.json();
+            if (startBtn) { startBtn.disabled = false; startBtn.textContent = t('builderid.startLogin'); }
             if (d.sessionId) {
                 builderIdSession = d.sessionId;
                 document.getElementById('builderIdUserCode').textContent = d.userCode;
                 document.getElementById('builderIdVerifyUrl').textContent = d.verificationUri;
+                // 显示代理信息
+                const proxyInfo = document.getElementById('builderIdProxyInfo');
+                if (proxyInfo && d.proxyIp) {
+                    document.getElementById('builderIdProxyIp').textContent = d.proxyIp;
+                    document.getElementById('builderIdProxyLoc').textContent = d.proxyLocation || '-';
+                    document.getElementById('builderIdProxyUrl').textContent = d.proxyUrl || '';
+                    proxyInfo.style.display = 'block';
+                }
                 document.getElementById('builderIdStep1').classList.add('hidden');
                 document.getElementById('builderIdStep2').classList.remove('hidden');
                 pollBuilderIdAuth(d.interval || 5);

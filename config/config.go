@@ -54,7 +54,9 @@ type Account struct {
 	Weight int `json:"weight,omitempty"` // 0 or 1 = normal, 2+ = higher priority
 
 	// Per-account proxy URL (e.g. socks5://user:pass@host:port or http://host:port)
-	ProxyURL string `json:"proxyUrl,omitempty"`
+	ProxyURL      string `json:"proxyUrl,omitempty"`
+	ProxyIP       string `json:"proxyIp,omitempty"`       // 代理出口 IP
+	ProxyLocation string `json:"proxyLocation,omitempty"` // IP 物理地址，如 "Los Angeles, California, United States"
 
 	// Account status
 	Enabled   bool   `json:"enabled"`             // Whether account is active in the pool

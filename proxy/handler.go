@@ -8,6 +8,7 @@ import (
 	"kiro-api-proxy/auth"
 	"kiro-api-proxy/config"
 	"kiro-api-proxy/pool"
+	"kiro-api-proxy/proxy302"
 	"net/http"
 	"strings"
 	"sync"
@@ -1715,6 +1716,8 @@ func (h *Handler) apiGetAccounts(w http.ResponseWriter, r *http.Request) {
 			"machineId":         a.MachineId,
 			"weight":            a.Weight,
 			"proxyUrl":          a.ProxyURL,
+			"proxyIp":           a.ProxyIP,
+			"proxyLocation":     a.ProxyLocation,
 			"subscriptionType":  a.SubscriptionType,
 			"subscriptionTitle": a.SubscriptionTitle,
 			"daysRemaining":     a.DaysRemaining,
@@ -2005,11 +2008,43 @@ func (h *Handler) apiStartBuilderIdLogin(w http.ResponseWriter, r *http.Request)
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 
-	session, err := auth.StartBuilderIdLogin(req.Region)
+	// 第一步：从 proxy302 获取 token
+	token, err := proxy302.GetToken()
+	if err != nil {
+		w.WriteHeader(500)
+		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("Failed to get proxy302 token: %v", err)})
+		return
+	}
+
+	// 第二步：获取静态流量代理
+	proxyData, err := proxy302.GetStaticTrafficProxy(token)
+	if err != nil {
+		w.WriteHeader(500)
+		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("Failed to get proxy: %v", err)})
+		return
+	}
+
+	// 拼接 socks5 URL
+	proxyURL := fmt.Sprintf("socks5://%s:%s@%s:%d", proxyData.UserName, proxyData.Password, proxyData.Host, proxyData.Port)
+
+	// 第三步：使用代理发起 Builder ID 登录
+	session, err := auth.StartBuilderIdLogin(req.Region, proxyURL)
 	if err != nil {
 		w.WriteHeader(500)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
+	}
+
+	// 记录代理 IP 到 session
+	session.ProxyIP = proxyData.IP
+
+	// 查询 IP 物理地址
+	ipLocation := ""
+	if loc, err := proxy302.GetIPLocation(proxyData.IP); err == nil {
+		ipLocation = fmt.Sprintf("%s, %s, %s", loc.City, loc.Region, loc.Country)
+		fmt.Printf("[proxy302] IP location for %s: %s\n", proxyData.IP, ipLocation)
+	} else {
+		fmt.Printf("[proxy302] GetIPLocation failed for %s: %v\n", proxyData.IP, err)
 	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -2017,6 +2052,9 @@ func (h *Handler) apiStartBuilderIdLogin(w http.ResponseWriter, r *http.Request)
 		"userCode":        session.UserCode,
 		"verificationUri": session.VerificationUri,
 		"interval":        session.Interval,
+		"proxyUrl":        proxyURL,
+		"proxyIp":         proxyData.IP,
+		"proxyLocation":   ipLocation,
 	})
 }
 
@@ -2030,7 +2068,7 @@ func (h *Handler) apiPollBuilderIdAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, refreshToken, clientID, clientSecret, region, expiresIn, status, err := auth.PollBuilderIdAuth(req.SessionID)
+	accessToken, refreshToken, clientID, clientSecret, region, proxyURL, proxyIP, expiresIn, status, err := auth.PollBuilderIdAuth(req.SessionID)
 	if err != nil {
 		w.WriteHeader(400)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -2058,20 +2096,34 @@ func (h *Handler) apiPollBuilderIdAuth(w http.ResponseWriter, r *http.Request) {
 	// 授权完成，获取用户信息
 	email, _, _ := auth.GetUserInfo(accessToken)
 
-	// 创建账号
+	// 查询代理 IP 物理地址
+	proxyLocation := ""
+	if proxyIP != "" {
+		if loc, err := proxy302.GetIPLocation(proxyIP); err == nil {
+			proxyLocation = fmt.Sprintf("%s, %s, %s", loc.City, loc.Region, loc.Country)
+			fmt.Printf("[proxy302] IP location for %s: %s\n", proxyIP, proxyLocation)
+		} else {
+			fmt.Printf("[proxy302] GetIPLocation failed for %s: %v\n", proxyIP, err)
+		}
+	}
+
+	// 创建账号，带上代理信息
 	account := config.Account{
-		ID:           auth.GenerateAccountID(),
-		Email:        email,
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		AuthMethod:   "idc",
-		Provider:     "BuilderId",
-		Region:       region,
-		ExpiresAt:    time.Now().Unix() + int64(expiresIn),
-		Enabled:      true,
-		MachineId:    config.GenerateMachineId(),
+		ID:            auth.GenerateAccountID(),
+		Email:         email,
+		AccessToken:   accessToken,
+		RefreshToken:  refreshToken,
+		ClientID:      clientID,
+		ClientSecret:  clientSecret,
+		AuthMethod:    "idc",
+		Provider:      "BuilderId",
+		Region:        region,
+		ExpiresAt:     time.Now().Unix() + int64(expiresIn),
+		Enabled:       true,
+		MachineId:     config.GenerateMachineId(),
+		ProxyURL:      proxyURL,
+		ProxyIP:       proxyIP,
+		ProxyLocation: proxyLocation,
 	}
 
 	if err := config.AddAccount(account); err != nil {
@@ -2085,8 +2137,10 @@ func (h *Handler) apiPollBuilderIdAuth(w http.ResponseWriter, r *http.Request) {
 		"success":   true,
 		"completed": true,
 		"account": map[string]interface{}{
-			"id":    account.ID,
-			"email": account.Email,
+			"id":            account.ID,
+			"email":         account.Email,
+			"proxyIp":       proxyIP,
+			"proxyLocation": proxyLocation,
 		},
 	})
 }
