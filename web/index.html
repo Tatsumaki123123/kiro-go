@@ -1180,6 +1180,15 @@
                     data-i18n="settings.saveEndpoint"></button>
             </div>
             <div class="card">
+                <div class="card-header"><span class="card-title" data-i18n="settings.adsPowerSettings"></span></div>
+                <div class="form-group">
+                    <label data-i18n="settings.adsPowerApiKey"></label>
+                    <input type="text" id="adsPowerApiKeyInput" placeholder="1cd51c2d3e134abef..." style="font-family:monospace;font-size:13px">
+                    <small style="color:#64748b;font-size:12px;margin-top:4px;display:block" data-i18n="settings.adsPowerApiKeyHint"></small>
+                </div>
+                <button class="btn btn-primary" onclick="saveAdsPowerConfig()" data-i18n="settings.saveAdsPower"></button>
+            </div>
+            <div class="card">
                 <div class="card-header"><span class="card-title" data-i18n="settings.adminPassword"></span></div>
                 <div class="form-group"><label data-i18n="settings.newPassword"></label><input type="password"
                         id="newPassword" data-i18n-placeholder="settings.newPasswordPlaceholder"></div>
@@ -1308,6 +1317,11 @@
                 'settings.endpointHint': '选择首选端点，自动选择模式下会根据可用性自动选择端点',
                 'settings.saveEndpoint': '保存端点设置',
                 'settings.endpointSaved': '端点设置已保存',
+                'settings.adsPowerSettings': 'AdsPower 设置',
+                'settings.adsPowerApiKey': 'API Key',
+                'settings.adsPowerApiKeyHint': 'AdsPower 本地 API Key，在 AdsPower → 自动化 → API 中获取',
+                'settings.saveAdsPower': '保存 AdsPower 设置',
+                'settings.adsPowerSaved': 'AdsPower 设置已保存',
                 'settings.adminPassword': '管理密码',
                 'settings.newPassword': '新密码',
                 'settings.newPasswordPlaceholder': '输入新密码',
@@ -1375,6 +1389,13 @@
                 'builderid.proxyIp': 'IP',
                 'builderid.proxyLoc': '地址',
                 'builderid.proxyUrl': '代理 URL',
+                'builderid.launchAds': '🚀 启动 AdsPower',
+                'builderid.launchingAds': '启动中...',
+                'builderid.launchAdsSuccess': 'AdsPower 已启动，验证链接已在浏览器中打开',
+                'builderid.adsNotRunning': '请先在本机启动 AdsPower',
+                'builderid.adsRelayNotRunning': '请先运行 adspower-relay.exe（下载后双击运行）',
+                'builderid.relayHint': '首次使用需下载并运行中继工具（双击运行后保持窗口开启）：',
+                'builderid.relayDownload': '下载 adspower-relay.exe',
                 'iam.startUrl': 'Start URL',
                 'iam.loginUrl': '登录链接',
                 'iam.completeLogin': '请在浏览器中完成登录，然后粘贴回调 URL',
@@ -1527,6 +1548,11 @@
                 'settings.endpointHint': 'Select preferred endpoint. In auto-select mode, the endpoint is automatically selected based on availability.',
                 'settings.saveEndpoint': 'Save Endpoint Settings',
                 'settings.endpointSaved': 'Endpoint settings saved',
+                'settings.adsPowerSettings': 'AdsPower Settings',
+                'settings.adsPowerApiKey': 'API Key',
+                'settings.adsPowerApiKeyHint': 'AdsPower local API Key. Find it in AdsPower → Automation → API',
+                'settings.saveAdsPower': 'Save AdsPower Settings',
+                'settings.adsPowerSaved': 'AdsPower settings saved',
                 'settings.adminPassword': 'Admin Password',
                 'settings.newPassword': 'New Password',
                 'settings.newPasswordPlaceholder': 'Enter new password',
@@ -1590,6 +1616,13 @@
                 'builderid.proxyIp': 'IP',
                 'builderid.proxyLoc': 'Location',
                 'builderid.proxyUrl': 'Proxy URL',
+                'builderid.launchAds': '🚀 Launch AdsPower',
+                'builderid.launchingAds': 'Launching...',
+                'builderid.launchAdsSuccess': 'AdsPower launched, verification URL opened in browser',
+                'builderid.adsNotRunning': 'Please start AdsPower on your local machine first',
+                'builderid.adsRelayNotRunning': 'Please run adspower-relay.exe first (download and double-click)',
+                'builderid.relayHint': 'First time: download and run the relay tool (keep window open):',
+                'builderid.relayDownload': 'Download adspower-relay.exe',
                 'iam.startUrl': 'Start URL',
                 'iam.loginUrl': 'Login URL',
                 'iam.completeLogin': 'Complete login in browser, then paste callback URL',
@@ -2268,6 +2301,7 @@
             document.getElementById('apiKeyInput').value = d.apiKey || '';
             loadThinkingConfig();
             loadEndpointConfig();
+            loadAdsPowerConfig();
         }
         async function loadThinkingConfig() {
             const res = await fetch('/admin/api/thinking', { headers: { 'X-Admin-Password': password } });
@@ -2288,6 +2322,20 @@
             const res = await fetch('/admin/api/endpoint', { headers: { 'X-Admin-Password': password } });
             const d = await res.json();
             document.getElementById('preferredEndpoint').value = d.preferredEndpoint || 'auto';
+        }
+        async function loadAdsPowerConfig() {
+            const res = await fetch('/admin/api/adspower', { headers: { 'X-Admin-Password': password } });
+            const d = await res.json();
+            document.getElementById('adsPowerApiKeyInput').value = d.apiKey || '';
+        }
+        async function saveAdsPowerConfig() {
+            const apiKey = document.getElementById('adsPowerApiKeyInput').value.trim();
+            const res = await fetch('/admin/api/adspower', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Password': password },
+                body: JSON.stringify({ apiKey })
+            });
+            const d = await res.json();
+            if (d.success) { alert(t('settings.adsPowerSaved')); } else { alert(t('common.saveFailed') + ': ' + d.error); }
         }
         async function saveEndpointConfig() {
             const res = await fetch('/admin/api/endpoint', {
@@ -2454,7 +2502,10 @@
                     '<div class="form-group" style="margin-top:16px"><label>' + t('builderid.verifyUrl') + '</label><div class="endpoint" style="margin-bottom:0"><span id="builderIdVerifyUrl" style="font-size:12px"></span></div>' +
                     '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-sm btn-secondary" style="flex:1" onclick="window.open(document.getElementById(\'builderIdVerifyUrl\').textContent,\'_blank\')">' + t('builderid.open') + '</button><button class="btn btn-sm btn-secondary" style="flex:1" onclick="navigator.clipboard.writeText(document.getElementById(\'builderIdVerifyUrl\').textContent);alert(\'' + t('common.copied') + '\')">' + t('common.copy') + '</button></div></div>' +
                     '<p id="builderIdStatus" style="color:#64748b;margin:16px 0;font-size:13px;text-align:center">' + t('builderid.waiting') + '</p>' +
-                    '<div class="modal-footer"><button class="btn btn-secondary" onclick="cancelBuilderIdLogin()">' + t('common.cancel') + '</button></div>' +
+                    '<div style="background:#fefce8;border:1px solid #fde68a;border-radius:6px;padding:8px 12px;font-size:11px;color:#92400e;margin-bottom:12px">' +
+                    '⚡ ' + t('builderid.relayHint') + ' <a href="/download/adspower-relay.exe" download style="color:#7c3aed;font-weight:600">' + t('builderid.relayDownload') + '</a>' +
+                    '</div>' +
+                    '<div class="modal-footer"><button class="btn btn-secondary" onclick="cancelBuilderIdLogin()">' + t('common.cancel') + '</button><button class="btn btn-success" id="adsPowerBtn" onclick="launchAdsPower()" style="display:none">' + t('builderid.launchAds') + '</button></div>' +
                     '</div>';
             } else if (type === 'local') {
                 title.textContent = t('modal.localTitle');
@@ -2597,6 +2648,8 @@
         }
         let builderIdSession = '';
         let builderIdPollTimer = null;
+        let builderIdProxyUrl = '';
+        let builderIdVerifyLink = '';
         async function startBuilderIdLogin() {
             const region = document.getElementById('builderIdRegion').value || 'us-east-1';
             // 显示 loading 状态
@@ -2607,6 +2660,8 @@
             if (startBtn) { startBtn.disabled = false; startBtn.textContent = t('builderid.startLogin'); }
             if (d.sessionId) {
                 builderIdSession = d.sessionId;
+                builderIdProxyUrl = d.proxyUrl || '';
+                builderIdVerifyLink = d.verificationUri || '';
                 document.getElementById('builderIdUserCode').textContent = d.userCode;
                 document.getElementById('builderIdVerifyUrl').textContent = d.verificationUri;
                 // 显示代理信息
@@ -2619,6 +2674,9 @@
                 }
                 document.getElementById('builderIdStep1').classList.add('hidden');
                 document.getElementById('builderIdStep2').classList.remove('hidden');
+                // 显示 AdsPower 启动按钮
+                const adsBtn = document.getElementById('adsPowerBtn');
+                if (adsBtn) adsBtn.style.display = '';
                 pollBuilderIdAuth(d.interval || 5);
             } else alert(t('common.failed') + ': ' + d.error);
         }
@@ -2642,7 +2700,97 @@
         function cancelBuilderIdLogin() {
             if (builderIdPollTimer) { clearTimeout(builderIdPollTimer); builderIdPollTimer = null; }
             builderIdSession = '';
+            builderIdProxyUrl = '';
+            builderIdVerifyLink = '';
             showModal('add');
+        }
+        async function launchAdsPower() {
+            const btn = document.getElementById('adsPowerBtn');
+            if (btn) { btn.disabled = true; btn.textContent = t('builderid.launchingAds'); }
+            // 通过本机 CORS 中继（adspower-relay）转发到 AdsPower
+            // 用户需先运行 adspower-relay.exe，它监听 50326 并转发到 50325
+            const adsBase = 'http://127.0.0.1:50326';
+            // 从后端读取 AdsPower API Key
+            let adsApiKey = '1cd51c2d3e134abefcf83de7930db3980088ed74c3616f8d';
+            try {
+                const cfgRes = await fetch('/admin/api/adspower', { headers: { 'X-Admin-Password': password } });
+                const cfgData = await cfgRes.json();
+                if (cfgData.apiKey) adsApiKey = cfgData.apiKey;
+            } catch (e) { /* 使用默认值 */ }
+            const adsHeaders = {
+                'Content-Type': 'application/json',
+                'Authorization': 'Basic ' + adsApiKey
+            };
+            try {
+                // 解析代理 URL: socks5://user:pass@host:port
+                const proxyUrl = builderIdProxyUrl;
+                let proxyHost = '', proxyPort = '', proxyUser = '', proxyPass = '';
+                try {
+                    const u = new URL(proxyUrl);
+                    proxyHost = u.hostname;
+                    proxyPort = u.port;
+                    proxyUser = u.username;
+                    proxyPass = u.password;
+                } catch (e) { throw new Error('Invalid proxy URL: ' + proxyUrl); }
+
+                // 创建浏览器环境
+                const profileName = 'Kiro-' + new Date().toISOString().slice(0, 10) + '-' + Math.floor(Math.random() * 1000);
+                let createData;
+                try {
+                    const createRes = await fetch(`${adsBase}/api/v1/user/create`, {
+                        method: 'POST',
+                        headers: adsHeaders,
+                        body: JSON.stringify({
+                            name: profileName,
+                            domain_name: 'view.awsapps.com',
+                            open_urls: builderIdVerifyLink ? [builderIdVerifyLink] : [],
+                            group_id: '0',
+                            user_proxy_config: {
+                                proxy_soft: 'other',
+                                proxy_type: 'socks5',
+                                proxy_host: proxyHost,
+                                proxy_port: proxyPort,
+                                proxy_user: proxyUser,
+                                proxy_password: proxyPass
+                            },
+                            fingerprint_config: {
+                                automatic_timezone: '1',
+                                language: ['en-US', 'en'],
+                                webrtc: 'disabled',
+                                screen_resolution: '1920_1080',
+                                ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.7680.80 Safari/537.36'
+                            }
+                        })
+                    });
+                    createData = await createRes.json();
+                } catch (e) {
+                    throw new Error(t('builderid.adsRelayNotRunning') + '\n\n' + e.message);
+                }
+                if (createData.code !== 0) throw new Error('Create profile failed: ' + createData.msg);
+                const profileId = createData.data.id;
+
+                // 启动浏览器
+                let startData;
+                try {
+                    const startRes = await fetch(`${adsBase}/api/v1/browser/start?user_id=${profileId}`, { headers: adsHeaders });
+                    startData = await startRes.json();
+                } catch (e) {
+                    throw new Error('Start browser failed: ' + e.message);
+                }
+                if (startData.code !== 0) {
+                    fetch(`${adsBase}/api/v1/user/delete`, {
+                        method: 'POST', headers: adsHeaders,
+                        body: JSON.stringify({ user_ids: [profileId] })
+                    }).catch(() => {});
+                    throw new Error('Start browser failed: ' + startData.msg);
+                }
+
+                if (btn) { btn.disabled = false; btn.textContent = t('builderid.launchAds'); }
+                alert(t('builderid.launchAdsSuccess'));
+            } catch (e) {
+                if (btn) { btn.disabled = false; btn.textContent = t('builderid.launchAds'); }
+                alert(t('common.failed') + ': ' + e.message);
+            }
         }
         let iamSession = '';
         async function startIamSso() {
