@@ -109,6 +109,9 @@ type Config struct {
 	// Endpoint configuration: "auto", "codewhisperer", or "amazonq"
 	PreferredEndpoint string `json:"preferredEndpoint,omitempty"`
 
+	// AdsPower configuration
+	AdsPowerApiKey string `json:"adsPowerApiKey,omitempty"` // AdsPower 本地 API Key
+
 	// Global statistics (persisted across restarts)
 	TotalRequests   int     `json:"totalRequests,omitempty"`   // Total API requests received
 	SuccessRequests int     `json:"successRequests,omitempty"` // Successful requests count
@@ -443,5 +446,23 @@ func UpdatePreferredEndpoint(endpoint string) error {
 	cfgLock.Lock()
 	defer cfgLock.Unlock()
 	cfg.PreferredEndpoint = endpoint
+	return Save()
+}
+
+// GetAdsPowerApiKey 获取 AdsPower API Key
+func GetAdsPowerApiKey() string {
+	cfgLock.RLock()
+	defer cfgLock.RUnlock()
+	if cfg.AdsPowerApiKey == "" {
+		return "1cd51c2d3e134abefcf83de7930db3980088ed74c3616f8d" // 默认值
+	}
+	return cfg.AdsPowerApiKey
+}
+
+// UpdateAdsPowerApiKey 更新 AdsPower API Key
+func UpdateAdsPowerApiKey(apiKey string) error {
+	cfgLock.Lock()
+	defer cfgLock.Unlock()
+	cfg.AdsPowerApiKey = apiKey
 	return Save()
 }

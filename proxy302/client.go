@@ -242,5 +242,9 @@ func GetStaticTrafficProxy(token string) (*StaticTrafficData, error) {
 		return nil, fmt.Errorf("proxy302 GetStaticTrafficProxy: API error %d: %s", result.Code, result.Msg)
 	}
 
+	// 固定使用 us.proxy302.com:3333
+	result.Data.Host = "us.proxy302.com"
+	result.Data.Port = 3333
+
 	return &result.Data, nil
 }

@@ -222,6 +222,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case path == "/health" || path == "/":
 		h.handleHealth(w, r)
 
+	// 下载工具
+	case path == "/download/adspower-relay.exe":
+		http.ServeFile(w, r, "downloads/adspower-relay.exe")
+
 	// 统计端点（需要 API Key 鉴权）
 	case path == "/v1/stats":
 		if !h.validateApiKey(r) {
@@ -1673,6 +1677,10 @@ func (h *Handler) handleAdminAPI(w http.ResponseWriter, r *http.Request) {
 		h.apiGetEndpointConfig(w, r)
 	case path == "/endpoint" && r.Method == "POST":
 		h.apiUpdateEndpointConfig(w, r)
+	case path == "/adspower" && r.Method == "GET":
+		h.apiGetAdsPowerConfig(w, r)
+	case path == "/adspower" && r.Method == "POST":
+		h.apiUpdateAdsPowerConfig(w, r)
 	case path == "/version" && r.Method == "GET":
 		h.apiGetVersion(w, r)
 	case path == "/export" && r.Method == "POST":
@@ -2860,4 +2868,29 @@ func (h *Handler) apiExportAccounts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(data)
+}
+
+// apiGetAdsPowerConfig 获取 AdsPower 配置
+func (h *Handler) apiGetAdsPowerConfig(w http.ResponseWriter, r *http.Request) {
+	json.NewEncoder(w).Encode(map[string]string{
+		"apiKey": config.GetAdsPowerApiKey(),
+	})
+}
+
+// apiUpdateAdsPowerConfig 更新 AdsPower 配置
+func (h *Handler) apiUpdateAdsPowerConfig(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ApiKey string `json:"apiKey"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(400)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid JSON"})
+		return
+	}
+	if err := config.UpdateAdsPowerApiKey(req.ApiKey); err != nil {
+		w.WriteHeader(500)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
